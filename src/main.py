@@ -22,7 +22,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 os.environ['TFDS_DATA_DIR'] = r"C:\Users\Thomas Kaprielian\tensorflow_datasets"
 
 
-def main(parameters):
+def main(parameters,lead):
     ######################################################
     # INITIALIZATION
     ######################################################
@@ -97,39 +97,13 @@ if __name__ == '__main__':
         {'latent_dimension': 8,  'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
         {'latent_dimension': 8,  'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
         {'latent_dimension': 8,  'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.3, 'beta': 1.2, 'gamma': 0.3}},
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.4, 'beta': 1.6, 'gamma': 0.4}},
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.3, 'beta': 1.2, 'gamma': 0.3}},
-        {'latent_dimension': 12, 'coefficients': {'alpha': 0.4, 'beta': 1.6, 'gamma': 0.4}},
         {'latent_dimension': 12, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
         {'latent_dimension': 16, 'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
         {'latent_dimension': 16, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.3, 'beta': 1.2, 'gamma': 0.3}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.4, 'beta': 1.6, 'gamma': 0.4}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.3, 'beta': 1.2, 'gamma': 0.3}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.4, 'beta': 1.6, 'gamma': 0.4}},
-        {'latent_dimension': 20, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.3, 'beta': 1.2, 'gamma': 0.3}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.4, 'beta': 1.6, 'gamma': 0.4}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
     ]
 
-    for k in combinations:
-        parameters.update(k)
-        main(parameters)
+    twelve_leads = ('I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6')
+    for lead in twelve_leads:
+        for k in combinations:
+            parameters.update(k)
+            main(parameters,lead)
