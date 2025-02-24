@@ -7,10 +7,6 @@ PROJECT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src
 # Add the `src/` folder to Python's path
 sys.path.append(PROJECT_DIR)
 
-# Now try importing the model
-from model.tcvae import TCVAE
-from model.encoder import Encoder
-from model.decoder import Decoder
 
 import sys
 import os
@@ -59,12 +55,11 @@ PATH = r"C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\results\run_5
 USE_PRECOMPUTED = True
 
 datasets = {
-    'name': ['physionet'],
+    'name': ['synth:1.0.11'],
     'split': 'train',
     'shuffle_size': 1024,
     'batch_size': 1024,
 }
 
-print('boo')
 df = Helper.experiments(datasets, path=PATH)
 

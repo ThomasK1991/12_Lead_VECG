@@ -6,7 +6,7 @@ import seaborn as sns
 from neurokit2.signal import signal_smooth
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.metrics import f1_score
-
+import os
 class Visualizations:
 
     @staticmethod
@@ -222,6 +222,12 @@ class Visualizations:
         fig = plt.figure(figsize=(5, 5))
         ax = sns.heatmap(a.transpose(), cmap="crest")
         ax.set(xlabel="Dimension", ylabel="Feature")
+        # Ensure the directory exists
+        save_dir = os.path.dirname(save_path)  # Extract directory from path
+        print(save_dir)
+        os.makedirs(save_dir, exist_ok=True)  # Create directory if it doesn't exist
+
+        # Save the figure
         fig.savefig(save_path, dpi=dpi, bbox_inches='tight')
 
     @staticmethod

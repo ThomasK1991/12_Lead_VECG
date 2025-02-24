@@ -20,8 +20,14 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 import numpy as np
-from model.encoder import Encoder
-from model.decoder import Decoder
+# Try importing normally (for scripts)
+try:
+    from model.encoder import Encoder
+    from model.decoder import Decoder
+# If it fails (Jupyter Notebook), adjust imports dynamically
+except ModuleNotFoundError:
+    from src.model.encoder import Encoder
+    from src.model.decoder import Decoder
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
@@ -109,29 +115,15 @@ class Helper:
     @staticmethod
     def get_labels(dataset):
         df = pd.DataFrame()
-
         for data in dataset:
-            # Remove non-numeric fields like 'subject' and 'lead'
-            keys = set(data.keys()) - {'ecg', 'quality', 'subject', 'lead'}  
-
-            # Debug: Print problematic keys
-            print(f"🔍 Available keys: {keys}")
-
-            # Convert only numeric values
-            numeric_dict = {key: data[key] for key in keys if isinstance(data[key], (int, float, np.number))}
-
-            try:
-                df = pd.concat([df, pd.DataFrame.from_dict(numeric_dict, dtype=np.float32)])
-            except Exception as e:
-                print(f"❌ Error converting to DataFrame: {e}")
-                print(f"🔹 Problematic Data: {numeric_dict}")
-
+            keys = set(data.keys()) - {'ecg', 'quality'}
+            dict = {key: data[key] for key in keys}
+            df = pd.concat([df, pd.DataFrame.from_dict(dict, dtype=np.float32)])
         return df
 
 
     @staticmethod
     def get_embedding(model, dataset, split='train', save_path=None, batch_size=512):
-
         data_train = tfds.load(dataset, split=[split])
         train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
         labels = Helper.get_labels(train)
@@ -290,8 +282,6 @@ class Helper:
                 print(f"- {layer.name} | Type: {type(layer)}")
 
             emb, ld = Helper.get_embeddings(model, datasets)
-            print("Data preview:\n", emb[0].head())
-            print("Column names:", emb[0].columns.tolist())
 
 
             mus_train = np.array(emb[0].iloc[:, :ld])
@@ -344,6 +334,7 @@ class Helper:
     @staticmethod
 
     def get_embeddings(model, datasets):
+
         split = datasets['split']
         batch_size = datasets['batch_size']
         result = []
@@ -352,29 +343,25 @@ class Helper:
             data_train = tfds.load(dataset, split=[split])
             train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
             labels = Helper.get_labels(train)
-            print('-------------')
-            print(labels)
-
-            print("🔍 Type of model._encoder:", type(model._encoder))
+            train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        
 
             # Extract encoder configuration safely
             if hasattr(model._encoder, "get_config"):
                 encoder_config = model._encoder.get_config()  # Get model config
                 encoder_config_json = json.dumps(encoder_config, indent=4)  # Convert config to JSON format
-                print("\n📌 Full model._encoder configuration:")
-                print(encoder_config_json)
             else:
                 print("\n⚠️ Warning: model._encoder does not have a `get_config()` method.")
 
             # Get embeddings
             df = model._encoder.predict(Helper.data_generator([train], method='stop'))
+
             df = df[0]
             ld = df.shape[1]
 
             # Process labels
             labels.index = range(0, len(labels))
             df = pd.concat([pd.DataFrame(df), labels], axis=1)
-            print("Embeddings with labels:\n", df.head())  # Debugging print
             result.append(df)
 
         return result, ld
