@@ -1,22 +1,18 @@
 train_dataset:
   name:
-  - 'synth:1.0.11'
-  - 'synth:1.0.9'
-  - zheng
-  - ptb
-  - medalcare
+  - physionet
   split: 'train'
   shuffle_size: 1024
   batch_size: 1024
 val_dataset:
   name:
-  - medalcare'
-  split: validation'
+  - physionet
+  split: 'test'
   shuffle_size: 1024
   batch_size: 1024
 save_results_path: ../results/run_5/
 seed: 42
-epochs: 200
+epochs: 100
 latent_dimension: 8
 learning_rate: 0.002
 coefficients:

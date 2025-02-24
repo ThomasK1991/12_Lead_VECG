@@ -40,10 +40,19 @@ class Encoder(keras.Model):
         return forward
 
     def get_config(self):
+        """ Properly serialize Encoder configuration """
         config = super().get_config()
-        config['latent_dim'] = self._latent_dim
-        config['summary'] = self.summary()
+        config.update({
+            "latent_dim": self._latent_dim,
+        })
         return config
+    
+    @classmethod
+    def from_config(cls, config):
+        """ Deserialize Encoder from config """
+        return cls(
+            latent_dim=config["latent_dim"], 
+        )
 
     def call(self, inputs):
         return self.encoder(inputs)

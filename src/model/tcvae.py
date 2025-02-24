@@ -1,7 +1,7 @@
-from src.model.vae import VAE
+
 import tensorflow as tf
-
-
+import keras
+from model.vae import VAE
 class TCVAE(VAE):
 
     def __init__(self, *args, **kwargs):
@@ -35,38 +35,42 @@ class TCVAE(VAE):
         self._gamma.assign(value)
 
     def _loss(self, reconstruction, x, mu, log_var, z):
-        size_batch = tf.shape(x)[0]
-        logiw_mat = self.log_importance_weight_matrix(size_batch)
+        print("\n🔍 Debugging `_loss()` function...")
 
-        recon_loss = tf.reduce_sum(tf.keras.losses.mean_absolute_error(x, reconstruction))
-        # log(q(z|x))
+        # ✅ Handle case where `x` is a tuple
+        if isinstance(x, tuple):
+            print(f"🔹 x is a tuple of length {len(x)}")
+            for i, item in enumerate(x):
+                print(f"  - Tuple Element {i}: Type = {type(item)}, Shape = {getattr(item, 'shape', 'N/A')}")
+            x = x[0]  # Extract tensor from tuple
+
+        # ✅ Ensure `x` is a tensor
+        if isinstance(x, tf.Tensor):
+            print(f"🔹 Corrected X Shape: {x.shape}, Dtype: {x.dtype}")
+        else:
+            print(f"⚠️ Warning: X is not a Tensor. Instead, got type: {type(x)}")
+
+        # Compute Loss Components
+        mae_loss = tf.keras.losses.MeanAbsoluteError()
+        recon_loss = tf.reduce_sum(mae_loss(x, reconstruction))  # Compute MAE loss
+
+        # KL Loss Calculations
         log_qz_x = tf.reduce_sum(self._dist(mu, tf.exp(log_var)).log_prob(z), axis=-1)
-
-        # log(p(z))
         log_prior = tf.reduce_sum(self._dist(tf.zeros_like(z), tf.ones_like(z)).log_prob(z), axis=-1)
-
-        # log(q(z(x_j) | x_i))
         log_qz_prob = self._dist(
-            tf.expand_dims(mu, 0), tf.expand_dims(tf.exp(log_var), 0),
+            tf.expand_dims(mu, 0), tf.expand_dims(tf.exp(log_var), 0)
         ).log_prob(tf.expand_dims(z, 1))
 
-        # log(q(z))
-        # we can sum due to the assumption of independent factors
-        log_qz = tf.reduce_logsumexp(logiw_mat + tf.reduce_sum(log_qz_prob, axis=2), axis=1)
-        # log(PI_i q(z_i))
-        log_qz_product = tf.reduce_sum(tf.reduce_logsumexp(tf.expand_dims(logiw_mat, 2) + log_qz_prob, axis=1), axis=1)
+        log_qz = tf.reduce_logsumexp(self.log_importance_weight_matrix(tf.shape(x)[0]) + tf.reduce_sum(log_qz_prob, axis=2), axis=1)
+        log_qz_product = tf.reduce_sum(tf.reduce_logsumexp(tf.expand_dims(self.log_importance_weight_matrix(tf.shape(x)[0]), 2) + log_qz_prob, axis=1), axis=1)
 
-        # I[z;x] = KL[q(z,x)||q(x)q(z)] = E_x[KL[q(z|x)||q(z)]]
+        # ✅ Compute Mutual Info Loss, TC Loss, and Dimension-Wise KL
         mutual_info_loss = tf.reduce_mean(tf.subtract(log_qz_x, log_qz))
-
-        # TC[z] = KL[q(z)||\prod_i z_i]
         tc_loss = tf.reduce_mean(tf.subtract(log_qz, log_qz_product))
-        # dw_kl_loss is KL[q(z)||p(z)] instead of usual KL[q(z|x)||p(z))]
         dimension_wise_kl = tf.reduce_mean(tf.subtract(log_qz_product, log_prior))
 
-        kl_loss = tf.multiply(self._alpha, mutual_info_loss) + \
-                  tf.multiply(self._beta, tc_loss) + \
-                  tf.multiply(self._gamma, dimension_wise_kl)
+        # Final KL loss
+        kl_loss = tf.multiply(self._alpha, mutual_info_loss) + tf.multiply(self._beta, tc_loss) + tf.multiply(self._gamma, dimension_wise_kl)
 
         total_loss = tf.add(recon_loss, kl_loss)
 

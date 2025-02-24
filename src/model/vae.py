@@ -4,7 +4,7 @@ import keras
 import numpy as np
 import math
 
-from src.utils.helper import Helper
+from utils.helper import Helper
 
 tfd = tfp.distributions
 
@@ -47,13 +47,39 @@ class VAE(tf.keras.Model):
         return tf.add(mean, tf.multiply(eps, tf.exp(log_var * 0.5)), name="sampled_latent_variable")
 
     def get_config(self):
+        """ Serialize VAE configuration for saving """
         config = super().get_config()
-        config['encoder'] = keras.saving.serialize_keras_object(self._encoder)
-        config['decoder'] = keras.saving.serialize_keras_object(self._decoder)
-        config['coefficients'] = self._coefficients
-        config['dist'] = self._dist
-        config['dataset_size'] = self._dataset_size
+        config.update({
+            "encoder": keras.saving.serialize_keras_object(self._encoder),
+            "decoder": keras.saving.serialize_keras_object(self._decoder),
+            "coefficients": self._coefficients,
+            "dataset_size": self._dataset_size,
+            "dist": self._dist.__name__ if hasattr(self._dist, "__name__") else str(self._dist),  # ✅ Ensure it's serializable
+        })
         return config
+    @classmethod
+    def from_config(cls, config):
+        """ Deserialize VAE from config """
+        
+        # ✅ Restore encoder & decoder
+        encoder = keras.saving.deserialize_keras_object(config["encoder"])
+        decoder = keras.saving.deserialize_keras_object(config["decoder"])
+        
+        # ✅ Restore coefficients
+        coefficients = config["coefficients"]
+
+        # ✅ Restore dataset size
+        dataset_size = config["dataset_size"]
+
+        # ✅ Convert `_dist` string back to a distribution class
+        dist_str = config["dist"]
+        if dist_str == "Normal":
+            dist = tfd.Normal
+        else:
+            raise ValueError(f"❌ Unknown distribution type in config: {dist_str}")
+
+        # ✅ Return reconstructed VAE
+        return cls(encoder, decoder, coefficients, dataset_size, dist=dist)
 
     @tf.function
     def sample(self, eps=None):
@@ -95,6 +121,7 @@ class VAE(tf.keras.Model):
 
     @tf.function
     def train_step(self, data):
+        print(type(data))
         with (tf.GradientTape() as tape):
             z_mean, z_log_var, z = self.encode(data)
             reconstruction = self.decode(z)
@@ -109,15 +136,59 @@ class VAE(tf.keras.Model):
         self._dwkl_tracker.update_state(loss_value['dw_kl'])
         self._mi.assign(loss_value['mi'])
         return loss_value
-
+    
     @tf.function
     def test_step(self, data):
+        print("\n🔍 Debugging test_step()")
+
+        # 🔹 Check the type of `data`
+        print(f"🔹 Type of `data`: {type(data)}")
+        
+        if isinstance(data, tuple):
+            print("✅ Data is a tuple")
+            print(f"🔹 Tuple length: {len(data)}")
+            print(f"🔹 First element type: {type(data[0])}")
+
+            if isinstance(data[0], tf.Tensor):
+                print(f"🔹 First element shape: {data[0].shape}")
+        
+        if isinstance(data, tf.Tensor):
+            print("❌ Data is a Tensor, but expected a tuple")
+            print(f"🔹 Tensor shape: {data.shape}")
+
+        # 🔹 Ensure correct format before encoding
+        if isinstance(data, tuple):
+            data = data[0]  # Extract the actual tensor from the tuple if needed
+            print(f"✅ Extracted Tensor Shape: {data.shape}")
+
+        # 🔹 Step 1: Encoding
+        print("\n🔹 Encoding Step")
         z_mean, z_log_var = self._encoder(data)
+        print(f"✅ Encoded z_mean shape: {z_mean.shape}, dtype: {z_mean.dtype}")
+        print(f"✅ Encoded z_log_var shape: {z_log_var.shape}, dtype: {z_log_var.dtype}")
+
+        # 🔹 Step 2: Reparameterization Trick
+        print("\n🔹 Reparameterization Step")
         z = self.reparameterize(z_mean, z_log_var)
+        print(f"✅ Latent Variable z shape: {z.shape}, dtype: {z.dtype}")
+
+        # 🔹 Step 3: Decoding
+        print("\n🔹 Decoding Step")
         reconstruction = self._decoder(z)
+        print(f"✅ Decoded Reconstruction shape: {reconstruction.shape}, dtype: {reconstruction.dtype}")
+
+        # 🔹 Step 4: Loss Calculation
+        print("\n🔹 Loss Calculation Step")
         loss_value = self._loss(reconstruction, data, z_mean, z_log_var, z)
+
+        # 🔹 Store Mutual Information Value
+        print("\n🔹 Storing MI Value")
         self._mi_val.assign(loss_value['mi'])
+        
+        print("\n✅ Test Step Completed Successfully\n")
+        
         return loss_value
+
 
     def log_normal_pdf(self, sample, mean, logvar):
         log2pi = tf.math.log(2. * np.pi)

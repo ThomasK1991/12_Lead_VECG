@@ -3,18 +3,23 @@ import datetime
 import os
 
 import tensorflow as tf
+import keras
 from keras.src.callbacks import ReduceLROnPlateau, TerminateOnNaN, CSVLogger, EarlyStopping, ModelCheckpoint
 from keras.src.optimizers import RMSprop
 
 from utils.callbacks import ReconstructionPlot, CoefficientScheduler, CollapseCallback
 from utils.helper import Helper
-
+import json 
 from model.encoder import Encoder
 from model.decoder import Decoder
 from model.tcvae import TCVAE
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 # TODO: Set path to the location of the tensorflow datasets
-os.environ['TFDS_DATA_DIR'] = '/mnt/sdb/home/ml/tensorflow_datasets/'
+os.environ['TFDS_DATA_DIR'] = r"C:\Users\Thomas Kaprielian\tensorflow_datasets"
 
 
 def main(parameters):
@@ -35,6 +40,7 @@ def main(parameters):
     # DATA LOADING
     ######################################################
     train, size_train = Helper.load_multiple_datasets(parameters['train_dataset'])
+    print("/n Train Type" + str(type(train)))
     val, size_val = Helper.load_multiple_datasets(parameters['val_dataset'])
 
     ######################################################
@@ -47,7 +53,7 @@ def main(parameters):
         EarlyStopping(monitor="val_loss", patience=parameters['early_stopping']),
         CoefficientScheduler(parameters['epochs'], parameters['coefficients'], parameters['coefficients_raise']),
         ReduceLROnPlateau(monitor='recon', factor=0.05, patience=20, min_lr=0.000001),
-        ModelCheckpoint(filepath=base_path + 'model_best/', monitor='loss', save_best_only=True, verbose=0),
+        ModelCheckpoint(filepath=base_path + 'model_best.keras', monitor='loss', save_best_only=True, verbose=0),
         ReconstructionPlot(train[0], base_path + 'training/reconstruction/', parameters['reconstruction']),
     ]
 
@@ -61,10 +67,20 @@ def main(parameters):
         epochs=parameters['epochs'], callbacks=callbacks, verbose=1,
     )
 
-    vae.save(base_path + 'model_final/')
+    # 🚀 2️⃣ Try Saving the Model Properly
+    model_path = base_path + "model_final.keras"
+
+    
+    try:
+        vae.save(model_path)
+        print(f"\n✅ Model saved successfully at: {model_path}")
+    except Exception as e:
+        print(f"\n❌ Error saving model: {e}")
+
 
 
 if __name__ == '__main__':
+    
     parser = argparse.ArgumentParser(
         prog='VECG', description='Representational Learning of ECG using disentangling VAE',
     )

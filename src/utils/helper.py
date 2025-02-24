@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Move up two levels to the root directory (where 'src' is a subfolder)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+import tensorflow as tf
+from tensorflow import keras
 import os, yaml, codecs, json
 import numpy as np
 import pandas as pd
@@ -13,7 +20,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 import numpy as np
-
+from model.encoder import Encoder
+from model.decoder import Decoder
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
@@ -32,6 +40,8 @@ class Helper:
             except FileExistsError:
                 print(f"Directory already exists: {path}")
 
+
+
     @staticmethod
     def data_generator(dataset, method='continue'):
         k = 0
@@ -40,22 +50,35 @@ class Helper:
         while True:
             try:
                 batch = next(iterator)
-                yield batch['ecg']['I']
+
+                # Extract ECG data from batch
+                ecg_batch = batch['ecg']['I']
+
+                # ✅ Ensure dtype is float32
+                ecg_batch = tf.cast(ecg_batch, dtype=tf.float32)
+
+                # ✅ Convert to KerasTensor explicitly
+                keras_tensor = tf.keras.backend.constant(ecg_batch)
+
+                # ✅ Wrap in a tuple before yielding
+                yield (keras_tensor,)
+
             except StopIteration:
                 if method == 'continue':
-                    if k == n - 1:
-                        k = 0
-                    else:
-                        k = k + 1
+                    k = 0 if k == n - 1 else k + 1
                     iterator = iter(dataset[k])
                 elif method == 'stop':
                     return
 
+
+
     @staticmethod
     def get_sample(dataset, n, label=None):
+
         k = None
         for example in dataset.take(1):
             k = example
+
         return (k['ecg']['I'][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg']['I'][n:(n + 1)]
 
     @staticmethod
@@ -82,14 +105,29 @@ class Helper:
     def print_available_gpu():
         print('Num GPUs Available: ', len(tf.config.list_physical_devices('GPU')))
 
+
     @staticmethod
     def get_labels(dataset):
         df = pd.DataFrame()
+
         for data in dataset:
-            keys = set(data.keys()) - {'ecg', 'quality'}
-            dict = {key: data[key] for key in keys}
-            df = pd.concat([df, pd.DataFrame.from_dict(dict, dtype=np.float32)])
+            # Remove non-numeric fields like 'subject' and 'lead'
+            keys = set(data.keys()) - {'ecg', 'quality', 'subject', 'lead'}  
+
+            # Debug: Print problematic keys
+            print(f"🔍 Available keys: {keys}")
+
+            # Convert only numeric values
+            numeric_dict = {key: data[key] for key in keys if isinstance(data[key], (int, float, np.number))}
+
+            try:
+                df = pd.concat([df, pd.DataFrame.from_dict(numeric_dict, dtype=np.float32)])
+            except Exception as e:
+                print(f"❌ Error converting to DataFrame: {e}")
+                print(f"🔹 Problematic Data: {numeric_dict}")
+
         return df
+
 
     @staticmethod
     def get_embedding(model, dataset, split='train', save_path=None, batch_size=512):
@@ -133,12 +171,22 @@ class Helper:
     def load_multiple_datasets(datasets):
         size = 0
         data_list = []
+        
         for i, k in enumerate(datasets['name']):
+            print(f"📥 Loading dataset: {k} (Split: {datasets['split']})")
+
             temp = tfds.load(k, split=[datasets['split']], shuffle_files=True)
-            data = temp[0].shuffle(datasets['shuffle_size']).batch(datasets['batch_size']).prefetch(tf.data.AUTOTUNE)
-            size = size + len(data)
+            
+            dataset_raw = temp[0]  # Get dataset before batching
+
+            # Apply batching AFTER checking shapes
+            data = dataset_raw.shuffle(datasets['shuffle_size']).batch(datasets['batch_size']).prefetch(tf.data.AUTOTUNE)
+
+            size += len(data)
             data_list.append(data)
         return data_list, size
+
+
 
     @staticmethod
     def load_dataset(dataset):
@@ -205,14 +253,18 @@ class Helper:
     @staticmethod
     def experiments(datasets, path, filter='2024-01-01 00:00:00'):
         df = pd.DataFrame()
-        for k in glob.glob(path + '*/'):
+        print('Executing experiments function')
+        subdirectories = glob.glob(os.path.join(path, "*/"))
+
+        for k in subdirectories:
             params = Helper.load_yaml_file(k + 'params.json')
             try:
                 train_progress = pd.read_csv(k + 'training/training_progress.csv')
                 n = len(train_progress) - 1
                 train_progress = train_progress.loc[n:n,
                                  ['alpha', 'beta', 'gamma', 'loss', 'recon', 'mi', 'tc', 'dw_kl']]
-                train_progress['time'] = pd.to_datetime(k[len(path):-1], format='%Y-%m-%d_%H-%M-%S')
+                folder_name = os.path.basename(os.path.normpath(k))  
+                train_progress['time'] = pd.to_datetime(folder_name, format='%Y-%m-%d_%H-%M-%S')
                 train_progress['latent_dim'] = params['latent_dimension']
                 train_progress['epoch'] = n + 1
                 df = pd.concat([df, train_progress])
@@ -224,9 +276,24 @@ class Helper:
         df['total'] = df.recon + df.mi + df.tc + df.dw_kl
 
         for i, val in enumerate(df.time):
-            model = tf.keras.models.load_model(
-                path + str(val).replace(' ', '_').replace(':', '-') + '/model_best/')
+            # Convert time value to string and clean it
+            val_str = str(val).replace(' ', '_').replace(':', '-')
+
+            # Properly join path elements
+            model_path = os.path.join(path, val_str, "model_best.keras")
+
+            print(f"Loading model from: {model_path}")  # Debugging print
+
+            model = tf.keras.models.load_model(model_path, custom_objects={"Encoder": Encoder, "Decoder": Decoder})
+            print("\n📌 Checking Model Layers:")
+            for layer in model.layers:
+                print(f"- {layer.name} | Type: {type(layer)}")
+
             emb, ld = Helper.get_embeddings(model, datasets)
+            print("Data preview:\n", emb[0].head())
+            print("Column names:", emb[0].columns.tolist())
+
+
             mus_train = np.array(emb[0].iloc[:, :ld])
             ys_train = np.array(emb[0].loc[:, ['p_height', 't_height']])
             df.loc[i, 'MIG'] = Disentanglement.compute_mig(mus_train, ys_train)['discrete_mig']
@@ -275,24 +342,43 @@ class Helper:
         return tf.add(mean, tf.multiply(eps, tf.exp(log_var * 0.5)), name="sampled_latent_variable")
 
     @staticmethod
+
     def get_embeddings(model, datasets):
         split = datasets['split']
         batch_size = datasets['batch_size']
         result = []
+
         for dataset in datasets['name']:
             data_train = tfds.load(dataset, split=[split])
             train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
             labels = Helper.get_labels(train)
+            print('-------------')
+            print(labels)
 
+            print("🔍 Type of model._encoder:", type(model._encoder))
+
+            # Extract encoder configuration safely
+            if hasattr(model._encoder, "get_config"):
+                encoder_config = model._encoder.get_config()  # Get model config
+                encoder_config_json = json.dumps(encoder_config, indent=4)  # Convert config to JSON format
+                print("\n📌 Full model._encoder configuration:")
+                print(encoder_config_json)
+            else:
+                print("\n⚠️ Warning: model._encoder does not have a `get_config()` method.")
+
+            # Get embeddings
             df = model._encoder.predict(Helper.data_generator([train], method='stop'))
             df = df[0]
             ld = df.shape[1]
 
+            # Process labels
             labels.index = range(0, len(labels))
             df = pd.concat([pd.DataFrame(df), labels], axis=1)
+            print("Embeddings with labels:\n", df.head())  # Debugging print
             result.append(df)
 
         return result, ld
+
 
     @staticmethod
     def get_icentia_embedding(splits, model):

@@ -1,6 +1,9 @@
 import numpy as np
 import tensorflow as tf
-from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # ✅ Prevents Tkinter from being used
+from matplotlib import pyplot as plt  # Now import `pyplot`
+
 
 from utils.helper import Helper
 
