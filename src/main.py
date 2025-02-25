@@ -66,8 +66,8 @@ def main(parameters,lead):
     vae = TCVAE(encoder, decoder, parameters['coefficients'], size_train)
     vae.compile(optimizer=RMSprop(learning_rate=parameters['learning_rate']))
     vae.fit(
-        Helper.data_generator(train), steps_per_epoch=size_train,
-        validation_data=Helper.data_generator(val), validation_steps=size_val,
+        Helper.data_generator(train,lead=lead), steps_per_epoch=size_train,
+        validation_data=Helper.data_generator(val,lead=lead), validation_steps=size_val,
         epochs=parameters['epochs'], callbacks=callbacks, verbose=1,
     )
 
@@ -99,12 +99,8 @@ if __name__ == '__main__':
     parameters = Helper.load_yaml_file(args.path_config)
 
     combinations = [
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
         {'latent_dimension': 8,  'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.2, 'beta': 0.8, 'gamma': 0.2}},
         {'latent_dimension': 12, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.01, 'beta': 0.04, 'gamma': 0.01}},
         {'latent_dimension': 16, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
     ]
 

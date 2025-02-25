@@ -28,6 +28,38 @@ try:
 except ModuleNotFoundError:
     from src.model.encoder import Encoder
     from src.model.decoder import Decoder
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_ecg(ecg_signal, lead_name="Lead"):
+    """
+    Plots the average ECG signal across the batch.
+    
+    Parameters:
+    ecg_signal (array-like): The ECG waveform batch.
+    lead_name (str): The name of the ECG lead being plotted.
+    """
+    # Ensure the signal is a NumPy array
+    if hasattr(ecg_signal, "numpy"):
+        ecg_signal = ecg_signal.numpy()
+
+    # Compute the mean ECG waveform across all samples in the batch
+    mean_ecg = np.mean(ecg_signal, axis=0)  # Averaging over batch dimension
+
+    print(f"Plotting Mean ECG with shape: {mean_ecg.shape}")  # Debugging output
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(mean_ecg, label=f"Mean ECG - {lead_name}", color='r', linewidth=2)
+    plt.xlabel("Time (samples)")
+    plt.ylabel("Amplitude")
+    plt.title(f"Average ECG Signal for {lead_name}")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(r"C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\{}.png".format(lead_name))
+
+
+
 class dotdict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
@@ -49,7 +81,7 @@ class Helper:
 
 
     @staticmethod
-    def data_generator(dataset, method='continue'):
+    def data_generator(dataset, method='continue',lead = 'I'):
         k = 0
         n = len(dataset)
         iterator = iter(dataset[k])
@@ -58,7 +90,10 @@ class Helper:
                 batch = next(iterator)
 
                 # Extract ECG data from batch
-                ecg_batch = batch['ecg']['I']
+                ecg_batch = batch['ecg'][lead]
+                # Plot only ONCE per epoch (for debugging)
+                if k == 0:  # Only plot the first batch in each epoch
+                    plot_ecg(ecg_batch, lead_name=f"Lead {lead}")
 
                 # ✅ Ensure dtype is float32
                 ecg_batch = tf.cast(ecg_batch, dtype=tf.float32)
