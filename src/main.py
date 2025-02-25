@@ -14,6 +14,12 @@ from model.encoder import Encoder
 from model.decoder import Decoder
 from model.tcvae import TCVAE
 import sys
+# Define the target directory
+custom_path = r"C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\src"
+
+# Add to sys.path
+if custom_path not in sys.path:
+    sys.path.append(custom_path)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -28,14 +34,12 @@ def main(parameters,lead):
     ######################################################
     tf.random.set_seed(parameters['seed'])
     start_time = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    base_path = parameters['save_results_path'] + start_time + '/'
+    base_path = parameters['save_results_path'] +'/' +lead + '/'  + start_time + '/' 
     Helper.generate_paths(
-        [base_path, base_path + 'model_best/', base_path + 'model_final/',
-         base_path + 'training/reconstruction/', base_path + 'training/collapse/']
+        [base_path,base_path + 'training/reconstruction/', base_path + 'training/collapse/']
     )
     Helper.write_json_file(parameters, base_path + 'params.json')
     Helper.print_available_gpu()
-
     ######################################################
     # DATA LOADING
     ######################################################
@@ -85,9 +89,11 @@ if __name__ == '__main__':
         prog='VECG', description='Representational Learning of ECG using disentangling VAE',
     )
     parser.add_argument(
-        '-p', '--path_config', type=str, default='./params.yml',
+        '-p', '--path_config', type=str, default='./src/params.yml',
         help='location of the params file (default: ./params.yml)',
     )
+
+    print("Current Directory:", os.getcwd())
 
     args = parser.parse_args()
     parameters = Helper.load_yaml_file(args.path_config)
@@ -103,7 +109,9 @@ if __name__ == '__main__':
     ]
 
     twelve_leads = ('I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6')
-    for lead in twelve_leads:
-        for k in combinations:
+
+    for lead in twelve_leads:   #Loops through each lead to train encoder and decoder
+
+        for k in combinations: #Loops through the combinations of hyper parameters for that lead
             parameters.update(k)
             main(parameters,lead)
