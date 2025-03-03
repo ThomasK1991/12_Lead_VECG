@@ -45,7 +45,10 @@ def main(parameters,lead):
     ######################################################
     train, size_train = Helper.load_multiple_datasets(parameters['train_dataset'])
     print("/n Train Type" + str(type(train)))
+
+
     val, size_val = Helper.load_multiple_datasets(parameters['val_dataset'])
+
 
     ######################################################
     # MACHINE LEARNING
@@ -104,7 +107,7 @@ if __name__ == '__main__':
         {'latent_dimension': 16, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
     ]
 
-    twelve_leads = ('I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6')
+    twelve_leads = (['V6','V5'])
 
     for lead in twelve_leads:   #Loops through each lead to train encoder and decoder
 

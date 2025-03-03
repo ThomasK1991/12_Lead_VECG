@@ -80,31 +80,39 @@ class Helper:
 
 
 
-    @staticmethod
-    def data_generator(dataset, method='continue',lead = 'I'):
+    def data_generator(dataset, method='continue', lead='I'):
         k = 0
         n = len(dataset)
         iterator = iter(dataset[k])
+
         while True:
             try:
                 batch = next(iterator)
+                ecg_batch = batch['ecg'].get(lead, None)  # Use .get() to prevent KeyError
+                # ✅ Convert NaNs back to real zeros BEFORE processing
+                ecg_batch = tf.where(tf.math.is_nan(ecg_batch), tf.zeros_like(ecg_batch), ecg_batch)
 
-                # Extract ECG data from batch
-                ecg_batch = batch['ecg'][lead]
-                # Plot only ONCE per epoch (for debugging)
-                if k == 0:  # Only plot the first batch in each epoch
-                    plot_ecg(ecg_batch, lead_name=f"Lead {lead}")
+                # ✅ Check for NaNs after loading data
+                if ecg_batch is None or tf.math.reduce_any(tf.math.is_nan(ecg_batch)):
+                    print(f"⚠️ NaN detected IMMEDIATELY AFTER LOADING in Lead {lead}!")
+                    print(f"Batch Data: {ecg_batch.numpy()}")
+                    continue  # Skip this batch
+
+
 
                 # ✅ Ensure dtype is float32
                 ecg_batch = tf.cast(ecg_batch, dtype=tf.float32)
 
-                # ✅ Convert to KerasTensor explicitly
-                keras_tensor = tf.keras.backend.constant(ecg_batch)
+                # ✅ Check for NaNs again after casting
+                if tf.math.reduce_any(tf.math.is_nan(ecg_batch)):
+                    print(f"⚠️ NaN detected AFTER CASTING in Lead {lead}!")
+                    print(f"Batch Data: {ecg_batch.numpy()}")
+                    continue  # Skip this batch
 
-                # ✅ Wrap in a tuple before yielding
-                yield (keras_tensor,)
+                yield (ecg_batch,)
 
             except StopIteration:
+
                 if method == 'continue':
                     k = 0 if k == n - 1 else k + 1
                     iterator = iter(dataset[k])
