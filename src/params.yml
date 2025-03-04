@@ -10,9 +10,9 @@ val_dataset:
   split: 'test'
   shuffle_size: 1024
   batch_size: 1024
-save_results_path: C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\results\run_5
+save_results_path: C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\results\run_10s
 seed: 42
-epochs: 3
+epochs: 100
 latent_dimension: 8
 learning_rate: 0.002
 coefficients:

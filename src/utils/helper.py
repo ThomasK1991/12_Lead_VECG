@@ -160,9 +160,20 @@ class Helper:
         df = pd.DataFrame()
         for data in dataset:
             keys = set(data.keys()) - {'ecg', 'quality'}
-            dict = {key: data[key] for key in keys}
-            df = pd.concat([df, pd.DataFrame.from_dict(dict, dtype=np.float32)])
+            dict_data = {key: data[key].numpy() if hasattr(data[key], 'numpy') else data[key] for key in keys}
+
+            # Ensure `diagnostic` is flattened to a single row
+            if "diagnostic" in dict_data:
+                diagnostic_array = np.array(dict_data["diagnostic"])
+                if diagnostic_array.ndim > 1:  # Flatten multi-dimensional data
+                    diagnostic_array = diagnostic_array.flatten()
+                dict_data["diagnostic"] = diagnostic_array
+
+            # Convert dictionary to DataFrame and append
+            df = pd.concat([df, pd.DataFrame([dict_data])], ignore_index=True)
+            
         return df
+
 
 
     @staticmethod
@@ -376,35 +387,56 @@ class Helper:
 
     @staticmethod
 
-    def get_embeddings(model, datasets):
+    def get_embeddings(models, datasets):
+        #Returns the latent vector for the data.
 
         split = datasets['split']
         batch_size = datasets['batch_size']
         result = []
 
+
         for dataset in datasets['name']:
-            data_train = tfds.load(dataset, split=[split])
+            data_train = tfds.load(dataset, split=[split],shuffle_files=False)
+            train_for_labels = data_train[0].batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
+            labels = Helper.get_labels(train_for_labels)
             train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
-            labels = Helper.get_labels(train)
-            train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
-        
+            lead_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+            # Initialize list to store embeddings per sample
+            embeddings_per_sample = None  
 
-            # Extract encoder configuration safely
-            if hasattr(model._encoder, "get_config"):
-                encoder_config = model._encoder.get_config()  # Get model config
-                encoder_config_json = json.dumps(encoder_config, indent=4)  # Convert config to JSON format
-            else:
-                print("\n⚠️ Warning: model._encoder does not have a `get_config()` method.")
+            for lead, model in zip(lead_names, models):
+                print(f"Processing lead {lead}...")
 
-            # Get embeddings
-            df = model._encoder.predict(Helper.data_generator([train], method='stop'))
+                # Extract encoder configuration safely
+                if hasattr(model._encoder, "get_config"):
+                    encoder_config = model._encoder.get_config()
+                    encoder_config_json = json.dumps(encoder_config, indent=4)
+                else:
+                    print("\n⚠️ Warning: model._encoder does not have a `get_config()` method.")
 
-            df = df[0]
-            ld = df.shape[1]
+                # Get embeddings (Shape: [num_samples, 8])
+                df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
+                df = df[0]  # Extract embeddings array
+                ld = df.shape[1]  # Should be 8
 
+                # Initialize `embeddings_per_sample` on first iteration
+                if embeddings_per_sample is None:
+                    embeddings_per_sample = df  # Start with the first lead's embeddings
+                else:
+                    embeddings_per_sample = np.hstack((embeddings_per_sample, df))  # Concatenate new lead's embeddings
+
+            # Final shape should be (num_samples, 96)
+            print("✅ Embeddings successfully merged!")
+            print("Final shape:", embeddings_per_sample.shape)  # Should be (num_samples, 96)
+
+            # Example: Print structure of first sample
+            print("First sample's feature vector:\n", embeddings_per_sample[0])
             # Process labels
             labels.index = range(0, len(labels))
-            df = pd.concat([pd.DataFrame(df), labels], axis=1)
+            for col in labels.columns:
+                sample_val = labels[col].iloc[0]
+                print(f"Column '{col}' sample type: {type(sample_val)}")
+            df = pd.concat([pd.DataFrame(embeddings_per_sample), labels], axis=1)
             result.append(df)
 
         return result, ld
@@ -430,37 +462,86 @@ class Helper:
 
 
     @staticmethod
-    def cross_validation_knn(X_train, X_val, y_train, y_val, scoring='accuracy'):
+    def cross_validation_knn(X_train, X_val, y_train_labels, y_val_labels, scoring='accuracy'):
+        """
+        Performs cross-validation to find the best k for KNN, with additional debugging checks.
+
+        Args:
+            X_train (np.array): Training feature matrix (num_samples, 96).
+            X_val (np.array): Validation feature matrix.
+            y_train_labels (np.array): Training labels (numeric).
+            y_val_labels (np.array): Validation labels (numeric).
+            scoring (str): Scoring metric (default: 'accuracy').
+
+        Returns:
+            best_k (int): The optimal k for KNN.
+        """
+        from sklearn.model_selection import PredefinedSplit, GridSearchCV
+        from sklearn.impute import SimpleImputer
+        from sklearn.pipeline import Pipeline
+        from sklearn.neighbors import KNeighborsClassifier
+
+        # ✅ DEBUG: Print initial label info
+        print("🔍 Debug: Checking y_train_labels and y_val_labels")
+        print("  - Type:", type(y_train_labels))
+        print("  - y_train_labels shape:", y_train_labels.shape)
+        print("  - y_val_labels shape:", y_val_labels.shape)
+
+        # Combine datasets
+        y_combined = np.concatenate((y_train_labels, y_val_labels))
         X_combined = np.vstack((X_train, X_val))
-        y_combined = np.concatenate((y_train, y_val))
+        # Ensure y_combined is a list before saving
+        y_combined_list = [str(item) for item in y_combined]
 
+        # Save to a text file for inspection
+        file_path = r"C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\analysis\y_combined_output.txt"
+
+        with open(file_path, "w") as f:
+            for item in y_combined_list:
+                f.write(item + "\n")
+
+        # ✅ DEBUG: Check encoded label distribution
+        print("✅ Encoded Labels Shape:", y_combined.shape)
+        print("✅ Unique Labels Count:", len(np.unique(y_combined)))
+        print("✅ Sample Encoded Labels:", y_combined[:10])
+
+        # Ensure X_combined is float32
+        X_combined = X_combined.astype(np.float32)
+
+        # Define PredefinedSplit for validation set
         test_fold = np.concatenate([
-            -np.ones(X_train.shape[0]),
-            np.zeros(X_val.shape[0])
+            -np.ones(X_train.shape[0]),  # Training samples (-1)
+            np.zeros(X_val.shape[0])     # Validation samples (0)
         ])
-
         ps = PredefinedSplit(test_fold)
 
+        # Imputation (if needed, fills missing values with 0)
         imputer = SimpleImputer(strategy='constant', fill_value=0)
 
+        # KNN Classifier
         knn = KNeighborsClassifier()
 
+        # Pipeline
         pipeline = Pipeline(steps=[('imputer', imputer), ('knn', knn)])
 
-        param_grid = {
-            'knn__n_neighbors': range(3, 50)
-        }
+        # Hyperparameter grid search for best k
+        param_grid = {'knn__n_neighbors': range(3, 10)}  # Start with a smaller range for debugging
 
-        grid_search = GridSearchCV(pipeline, param_grid, cv=ps, scoring=scoring)
+        # ✅ DEBUG: Use error_score='raise' to get exact failure reason
+        grid_search = GridSearchCV(pipeline, param_grid, cv=ps, scoring=scoring, error_score='raise')
 
-        grid_search.fit(X_combined, y_combined)
+        try:
+            grid_search.fit(X_combined, y_combined)
+            best_k = grid_search.best_params_['knn__n_neighbors']
+            best_score = grid_search.best_score_
+            print(f'✅ Best k: {best_k} with accuracy: {best_score:.4f}')
+        except Exception as e:
+            print("🚨 ERROR in GridSearchCV:", str(e))
+            return None
 
-        best_k = grid_search.best_params_['knn__n_neighbors']
-        best_score = grid_search.best_score_
-
-        print(f'Best k: {best_k} with accuracy: {best_score}')
         return best_k
-    
+
+
     @staticmethod
     def calculate_f1(confusion_matrix, labels):
         num_classes = confusion_matrix.shape[0]

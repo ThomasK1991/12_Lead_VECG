@@ -102,12 +102,12 @@ if __name__ == '__main__':
     parameters = Helper.load_yaml_file(args.path_config)
 
     combinations = [
-        {'latent_dimension': 8,  'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
+        #{'latent_dimension': 8,  'coefficients': {'alpha': 0.1, 'beta': 0.4, 'gamma': 0.1}},
         {'latent_dimension': 12, 'coefficients': {'alpha': 0.5, 'beta': 2.0, 'gamma': 0.5}},
-        {'latent_dimension': 16, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
+        #{'latent_dimension': 16, 'coefficients': {'alpha': 0.05, 'beta': 0.2, 'gamma': 0.05}},
     ]
 
-    twelve_leads = (['V6','V5'])
+    twelve_leads = (['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'])
 
     for lead in twelve_leads:   #Loops through each lead to train encoder and decoder
 
