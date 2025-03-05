@@ -10,7 +10,7 @@ val_dataset:
   split: 'test'
   shuffle_size: 1024
   batch_size: 1024
-save_results_path: C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\results\run_10s
+save_results_path: /users/newc6477/VAE/12_Lead_VECG/results/run_10s
 seed: 42
 epochs: 100
 latent_dimension: 8

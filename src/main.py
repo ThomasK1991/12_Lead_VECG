@@ -15,7 +15,7 @@ from model.decoder import Decoder
 from model.tcvae import TCVAE
 import sys
 # Define the target directory
-custom_path = r"C:\Users\Thomas Kaprielian\Documents\Master's Thesis\VECG\src"
+custom_path = r"/users/newc6477/VAE/12_Lead_VECG/src"
 
 # Add to sys.path
 if custom_path not in sys.path:
@@ -25,7 +25,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 # TODO: Set path to the location of the tensorflow datasets
-os.environ['TFDS_DATA_DIR'] = r"C:\Users\Thomas Kaprielian\tensorflow_datasets"
+os.environ['TFDS_DATA_DIR'] = r"/data/newc6477/tfds_data/"
 
 
 def main(parameters,lead):
