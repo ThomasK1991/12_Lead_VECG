@@ -122,13 +122,13 @@ class Helper:
 
 
     @staticmethod
-    def get_sample(dataset, n, label=None):
+    def get_sample(dataset, n, lead = 'I', label=None):
 
         k = None
         for example in dataset.take(1):
             k = example
 
-        return (k['ecg']['I'][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg']['I'][n:(n + 1)]
+        return (k['ecg'][lead][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg'][lead][n:(n + 1)]
 
     @staticmethod
     def scheduler(epoch, lr):
