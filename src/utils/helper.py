@@ -83,7 +83,7 @@ class Helper:
     def data_generator(dataset, method='continue', lead='I'):
         k = 0
         n = len(dataset)
-        iterator = iter(dataset[k])
+        iterator = iter(dataset[k]) #his allows fetching batches over the dataset sequentially using next(iterator).
 
         while True:
             try:
@@ -112,23 +112,27 @@ class Helper:
                 yield (ecg_batch,)
 
             except StopIteration:
-
                 if method == 'continue':
-                    k = 0 if k == n - 1 else k + 1
+                    k = (k + 1) % n  # Wrap around
                     iterator = iter(dataset[k])
                 elif method == 'stop':
-                    return
+                    print("✅ Generator exhausted normally.")
+                    break  # <---- Use break instead of return (better in tf context)
+            except Exception as e:
+                print(f"❌ Unhandled error in generator: {e}")
+                continue
 
 
 
     @staticmethod
-    def get_sample(dataset, n, label=None):
+    def get_sample(dataset, n, lead = 'I', label=None):
 
         k = None
         for example in dataset.take(1):
             k = example
 
-        return (k['ecg']['I'][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg']['I'][n:(n + 1)]
+        return (k['ecg'][lead][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg'][lead][n:(n + 1)]
+
 
     @staticmethod
     def scheduler(epoch, lr):
@@ -217,19 +221,31 @@ class Helper:
     def load_multiple_datasets(datasets):
         size = 0
         data_list = []
-        
+
+        # Ensure split is a list (for both train and val cases)
+        splits = datasets['split']
+        if isinstance(splits, str):
+            splits = [splits]
+
         for i, k in enumerate(datasets['name']):
-            print(f"📥 Loading dataset: {k} (Split: {datasets['split']})")
+            print(f"📥 Loading dataset: {k} (Splits: {splits})")
 
-            temp = tfds.load(k, split=[datasets['split']], shuffle_files=True)
-            
-            dataset_raw = temp[0]  # Get dataset before batching
+            # Load and merge multiple splits if needed
+            datasets_combined = []
+            for split in splits:
+                temp = tfds.load(k, split=split, shuffle_files=True)
+                datasets_combined.append(temp)
 
-            # Apply batching AFTER checking shapes
+            # Concatenate all splits into a single dataset
+            dataset_raw = datasets_combined[0]
+            for ds in datasets_combined[1:]:
+                dataset_raw = dataset_raw.concatenate(ds)
+
             data = dataset_raw.shuffle(datasets['shuffle_size']).batch(datasets['batch_size']).prefetch(tf.data.AUTOTUNE)
 
             size += len(data)
             data_list.append(data)
+
         return data_list, size
 
 
@@ -386,62 +402,135 @@ class Helper:
         return tf.add(mean, tf.multiply(eps, tf.exp(log_var * 0.5)), name="sampled_latent_variable")
 
     @staticmethod
-
     def get_embeddings(models, datasets):
-        #Returns the latent vector for the data.
+        """
+        Generates merged embeddings from multiple models (one per lead),
+        handling different latent dimensions and multiple TFDS splits.
+        """
+        split = datasets['split']
+        batch_size = datasets['batch_size']
+        results = []
+
+        for dataset in datasets['name']:
+            print(f"\n📦 Loading dataset: {dataset}")
+
+            # --- Load and merge multiple splits if provided ---
+            if isinstance(split, list):
+                print(f"  ⤷ Using splits: {split}")
+                combined = tfds.load(dataset, split=split[0], shuffle_files=False)
+                for s in split[1:]:
+                    combined = combined.concatenate(tfds.load(dataset, split=s, shuffle_files=False))
+            else:
+                combined = tfds.load(dataset, split=split, shuffle_files=False)
+
+            train_for_labels = combined.batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
+            labels = Helper.get_labels(train_for_labels)
+
+            train = combined.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+            lead_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+            embeddings_per_sample = None
+            total_latent_dim = 0
+
+            for lead, model in zip(lead_names, models):
+                print(f"🔍 Processing lead {lead}...")
+
+                df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
+                df = df[0]  # Extract embeddings
+                ld = df.shape[1]
+                total_latent_dim += ld
+
+                if embeddings_per_sample is None:
+                    embeddings_per_sample = df
+                else:
+                    embeddings_per_sample = np.hstack((embeddings_per_sample, df))
+
+            print(f"✅ All leads processed. Final embedding shape: {embeddings_per_sample.shape}")
+            print(f"📐 Total latent dimension: {total_latent_dim}")
+
+            # Attach labels
+            labels.index = range(0, len(labels))
+            df_final = pd.concat([pd.DataFrame(embeddings_per_sample), labels], axis=1)
+            results.append(df_final)
+
+        return results, total_latent_dim
+    
+    @staticmethod
+    def get_embeddings_single_model(model, datasets, lead):
+        """
+        Generate embeddings using a single model for a specific lead.
+        """
 
         split = datasets['split']
         batch_size = datasets['batch_size']
         result = []
 
-
         for dataset in datasets['name']:
-            data_train = tfds.load(dataset, split=[split],shuffle_files=False)
-            train_for_labels = data_train[0].batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
+            if isinstance(split, list):
+                print(f"\n📦 Loading dataset '{dataset}' with splits: {split}")
+                combined = tfds.load(dataset, split=split[0], shuffle_files=False)
+                for s in split[1:]:
+                    combined = combined.concatenate(tfds.load(dataset, split=s, shuffle_files=False))
+            else:
+                print(f"\n📦 Loading dataset '{dataset}' with split: {split}")
+                combined = tfds.load(dataset, split=split, shuffle_files=False)
+
+            train_for_labels = combined.batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
             labels = Helper.get_labels(train_for_labels)
-            train = data_train[0].batch(batch_size).prefetch(tf.data.AUTOTUNE)
-            lead_names = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
-            # Initialize list to store embeddings per sample
-            embeddings_per_sample = None  
 
-            for lead, model in zip(lead_names, models):
-                print(f"Processing lead {lead}...")
+            train = combined.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-                # Extract encoder configuration safely
-                if hasattr(model._encoder, "get_config"):
-                    encoder_config = model._encoder.get_config()
-                    encoder_config_json = json.dumps(encoder_config, indent=4)
-                else:
-                    print("\n⚠️ Warning: model._encoder does not have a `get_config()` method.")
+            # Get embeddings
+            print(f"🔍 Processing lead: {lead}")
+            df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
+            df = df[0]  # Extract embeddings array
+            ld = df.shape[1]
 
-                # Get embeddings (Shape: [num_samples, 8])
-                df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
-                df = df[0]  # Extract embeddings array
-                ld = df.shape[1]  # Should be 8
-
-                # Initialize `embeddings_per_sample` on first iteration
-                if embeddings_per_sample is None:
-                    embeddings_per_sample = df  # Start with the first lead's embeddings
-                else:
-                    embeddings_per_sample = np.hstack((embeddings_per_sample, df))  # Concatenate new lead's embeddings
-
-            # Final shape should be (num_samples, 96)
-            print("✅ Embeddings successfully merged!")
-            print("Final shape:", embeddings_per_sample.shape)  # Should be (num_samples, 96)
-
-            # Example: Print structure of first sample
-            print("First sample's feature vector:\n", embeddings_per_sample[0])
-            # Process labels
+            # Combine embeddings with labels
             labels.index = range(0, len(labels))
-            for col in labels.columns:
-                sample_val = labels[col].iloc[0]
-                print(f"Column '{col}' sample type: {type(sample_val)}")
-            df = pd.concat([pd.DataFrame(embeddings_per_sample), labels], axis=1)
-            result.append(df)
+            df_final = pd.concat([pd.DataFrame(df), labels], axis=1)
+            result.append(df_final)
 
         return result, ld
 
+    @staticmethod
+    def get_embeddings_multiple_model(models, datasets, lead):
+        """
+        Generate embeddings using a single model for a specific lead.
+        """
 
+        split = datasets['split']
+        batch_size = datasets['batch_size']
+        result = []
+
+        for dataset in datasets['name']:
+            if isinstance(split, list):
+                print(f"\n📦 Loading dataset '{dataset}' with splits: {split}")
+                combined = tfds.load(dataset, split=split[0], shuffle_files=False)
+                for s in split[1:]:
+                    combined = combined.concatenate(tfds.load(dataset, split=s, shuffle_files=False))
+            else:
+                print(f"\n📦 Loading dataset '{dataset}' with split: {split}")
+                combined = tfds.load(dataset, split=split, shuffle_files=False)
+
+            train_for_labels = combined.batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
+            labels = Helper.get_labels(train_for_labels)
+
+            train = combined.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+            # Get embeddings
+            print(f"🔍 Processing lead: {lead}")
+            for model in models:
+                df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
+                df = df[0]  # Extract embeddings array
+                ld = df.shape[1]
+
+                # Combine embeddings with labels
+                labels.index = range(0, len(labels))
+                df_final = pd.concat([pd.DataFrame(df), labels], axis=1)
+                result.append(df_final)
+
+        return result, ld
     @staticmethod
     def get_icentia_embedding(splits, model):
         datasets = {

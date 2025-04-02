@@ -21,10 +21,10 @@ class CoefficientScheduler(tf.keras.callbacks.Callback):
         self._beta_cycle = np.ones(epochs) * beta
         self._gamma_cycle = np.ones(epochs) * gamma
 
-        #coef_raise = annealing['coefficients_raise']
-        #self._alpha_cycle[0:coef_raise] = np.linspace(0, alpha, coef_raise)
-        #self._beta_cycle[0:coef_raise] = np.linspace(0, beta, coef_raise)
-        #self._gamma_cycle[0:coef_raise] = np.linspace(0, gamma, coef_raise)
+        coef_raise = coefficient_raise
+        self._alpha_cycle[0:coef_raise] = np.linspace(alpha, 4, coef_raise)
+        self._beta_cycle[0:60] = np.linspace(0, beta, 60)
+        self._gamma_cycle[0:coef_raise] = np.linspace(0.05, gamma, coef_raise)
 
 
     def on_epoch_begin(self, epoch, logs=None):
@@ -34,13 +34,13 @@ class CoefficientScheduler(tf.keras.callbacks.Callback):
 
 
 class ReconstructionPlot(tf.keras.callbacks.Callback):
-    def __init__(self, dataset, path, params):
+    def __init__(self, dataset, path, params,lead):
 
         sample = params['index_sample']
         period = params['period_plot']
-
+        lead = lead
         super(ReconstructionPlot, self).__init__()
-        self._data = Helper.get_sample(dataset, sample)
+        self._data = Helper.get_sample(dataset, sample,lead)
         self._period = period
         self._path = path
 
@@ -54,6 +54,7 @@ class ReconstructionPlot(tf.keras.callbacks.Callback):
             plt.legend()
             plt.savefig(self._path + 'reconstruction_' + str(epoch) + '.png')
             plt.close()
+
 
 
 class CollapseCallback(tf.keras.callbacks.Callback):

@@ -55,4 +55,6 @@ class Encoder(keras.Model):
         )
 
     def call(self, inputs):
-        return self.encoder(inputs)
+        return self.encoder(inputs) 
+
+

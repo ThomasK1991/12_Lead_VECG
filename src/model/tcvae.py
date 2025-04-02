@@ -70,7 +70,7 @@ class TCVAE(VAE):
         dimension_wise_kl = tf.reduce_mean(tf.subtract(log_qz_product, log_prior))
 
         # Final KL loss
-        kl_loss = tf.multiply(self._alpha, mutual_info_loss) + tf.multiply(self._beta, tc_loss) + tf.multiply(self._gamma, dimension_wise_kl)
+        kl_loss = -tf.multiply(self._alpha, mutual_info_loss) + tf.multiply(self._beta, tc_loss) + tf.multiply(self._gamma, dimension_wise_kl)
 
         total_loss = tf.add(recon_loss, kl_loss)
 

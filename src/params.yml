@@ -1,16 +1,4 @@
-train_dataset:
-  name:
-  - physionet
-  split: 'train'
-  shuffle_size: 1024
-  batch_size: 1024
-val_dataset:
-  name:
-  - physionet
-  split: 'test'
-  shuffle_size: 1024
-  batch_size: 1024
-save_results_path: /users/newc6477/VAE/12_Lead_VECG/results/run_10s
+save_results_path: /users/newc6477/VAE/12_Lead_VECG/results/full_set
 seed: 42
 epochs: 100
 latent_dimension: 8
@@ -19,8 +7,8 @@ coefficients:
   alpha: 1.0
   beta: 4.0
   gamma: 1.0
-coefficients_raise: 20
-early_stopping: 50
+coefficients_raise: 50
+early_stopping: 60
 reconstruction:
   period_plot: 20
   index_sample: 5
