@@ -31,7 +31,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
 # TODO: Set path to the location of the tensorflow datasets
-os.environ['TFDS_DATA_DIR'] = r"/data/newc6477/VAE/Single_Beat/5_percent_Physionet/"
+os.environ['TFDS_DATA_DIR'] = r"/data/newc6477/VAE/Mean_Beat/All_Physionet/"
 
 
 class CustomModelCheckpoint(ModelCheckpoint):
@@ -48,7 +48,7 @@ class CustomModelCheckpoint(ModelCheckpoint):
         else:
             
             super()._save_model(epoch, logs, batch=batch)
-def main(parameters,lead,i):
+def main(parameters,lead,i,train,size_train,val,size_val):
     ######################################################
     # INITIALIZATION
     ######################################################
@@ -64,12 +64,6 @@ def main(parameters,lead,i):
     # DATA LOADING
     ######################################################
 
-    train, size_train = Helper.load_multiple_datasets(parameters['train_dataset'])
-
-    print("/n Train Type" + str(type(train)))
-
-
-    val, size_val = Helper.load_multiple_datasets(parameters['val_dataset'])
     ## Ourput from load_multiple_data_sets is a list of tfds that are batched. Each member of the list corresponds to one of the datasets in paramters['train_dataset'] 
     ## Each member of the list is a batched tfds.datasets.datasets with all the leads.
 
@@ -165,17 +159,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
     parameters = Helper.load_yaml_file(args.path_config)
     combinations = [
-        {'latent_dimension': 20, 'coefficients': {'alpha': 6.01, 'beta': 0.3, 'gamma': 0.2}},
-        {'latent_dimension': 24, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},
         {'latent_dimension': 16, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},  # current best
         {'latent_dimension': 18, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},
+        {'latent_dimension': 20, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},
         {'latent_dimension': 22, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},
+        {'latent_dimension': 24, 'coefficients': {'alpha': 2.01, 'beta': 0.3, 'gamma': 0.2}},
     ]
 
 
-    
 
-    twelve_leads = (['V4', 'V5', 'V6'])
+
+    twelve_leads = (['V6'])
     for i in range(1,2):
         all_splits = [f"split{j}" for j in range(1,6)]
         # Assign test split
@@ -198,9 +192,14 @@ if __name__ == '__main__':
             'shuffle_size': 1024,
             'batch_size': 1024,
         }
+        train, size_train = Helper.load_multiple_datasets(parameters['train_dataset'])
 
+        print("/n Train Type" + str(type(train)))
+
+
+        val, size_val = Helper.load_multiple_datasets(parameters['val_dataset'])
         for lead in twelve_leads:   #Loops through each lead to train encoder and decoder
 
             for k in combinations: #Loops through the combinations of hyper parameters for that lead
                 parameters.update(k)
-                main(parameters,lead,i)
+                main(parameters,lead,i,train,size_train,val,size_val)

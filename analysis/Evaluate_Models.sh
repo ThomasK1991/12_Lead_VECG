@@ -57,11 +57,10 @@ if [ "$DEBUG" == true ]; then
   python -c "import tensorflow as tf; print('GPUs visible to TensorFlow:', tf.config.list_physical_devices('GPU'))"
 fi
 
-
-# ===== Run Training =====
-echo -e "\n🏃‍♂️ Running your VAE script...\n"
-python /users/newc6477/VAE/12_Lead_VECG/src/main.py -p /users/newc6477/VAE/12_Lead_VECG/src/params.yml
-
+# ===== Run Evaluation Script =====
+echo "📁 Checking script path: /users/newc6477/VAE/12_Lead_VECG/analysis/Evaluate_Models.py"
+ls -lh /users/newc6477/VAE/12_Lead_VECG/analysis/Evaluate_Models.py
+python /users/newc6477/VAE/12_Lead_VECG/analysis/Evaluate_Models.py
 
 # ===== Deactivate Conda and Wrap Up =====
 conda deactivate

@@ -494,43 +494,67 @@ class Helper:
         return result, ld
 
     @staticmethod
-    def get_embeddings_multiple_model(models, datasets, lead):
+    def get_embeddings_multiple_model(models, datasets, lead, save_dir=None):
         """
-        Generate embeddings using a single model for a specific lead.
+        Generate and optionally save embeddings using multiple models.
+        Optimized for batching and GPU acceleration.
         """
+        import time
+        import tensorflow_datasets as tfds
 
         split = datasets['split']
         batch_size = datasets['batch_size']
         result = []
+        latent_dim = None
 
-        for dataset in datasets['name']:
-            if isinstance(split, list):
-                print(f"\n📦 Loading dataset '{dataset}' with splits: {split}")
-                combined = tfds.load(dataset, split=split[0], shuffle_files=False)
-                for s in split[1:]:
-                    combined = combined.concatenate(tfds.load(dataset, split=s, shuffle_files=False))
-            else:
-                print(f"\n📦 Loading dataset '{dataset}' with split: {split}")
-                combined = tfds.load(dataset, split=split, shuffle_files=False)
+        # Load & batch dataset ONCE
+        print(f"\n📦 Loading dataset(s): {datasets['name']} | Splits: {split}")
+        all_data = []
+        for dataset_name in datasets['name']:
+            ds = tfds.load(dataset_name, split=split[0], shuffle_files=False)
+            for s in split[1:]:
+                ds = ds.concatenate(tfds.load(dataset_name, split=s, shuffle_files=False))
+            all_data.append(ds)
 
-            train_for_labels = combined.batch(batch_size).unbatch().prefetch(tf.data.AUTOTUNE)
-            labels = Helper.get_labels(train_for_labels)
+        # Merge if needed
+        dataset = all_data[0]
+        for ds in all_data[1:]:
+            dataset = dataset.concatenate(ds)
 
-            train = combined.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        # Batch dataset for model prediction
+        batched_dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-            # Get embeddings
-            print(f"🔍 Processing lead: {lead}")
-            for model in models:
-                df = model._encoder.predict(Helper.data_generator([train], lead=lead, method='stop'))
-                df = df[0]  # Extract embeddings array
-                ld = df.shape[1]
+        # Extract labels once (could be optimized based on your label structure)
+        label_dataset = dataset.map(lambda x: x['diagnostic'])  # adjust key as needed
+        labels = list(label_dataset.as_numpy_iterator())
+        labels = pd.DataFrame(labels)
 
-                # Combine embeddings with labels
-                labels.index = range(0, len(labels))
-                df_final = pd.concat([pd.DataFrame(df), labels], axis=1)
-                result.append(df_final)
+        # Run embedding generation for each model
+        for idx, model in enumerate(models):
+            print(f"\n🧠 Running model {idx+1}/{len(models)} on GPU (if available)...")
+            start = time.time()
 
-        return result, ld
+            with tf.device('/GPU:0' if tf.config.list_physical_devices('GPU') else '/CPU:0'):
+                embeddings = model._encoder.predict(
+                    Helper.data_generator([batched_dataset], lead=lead, method='stop'),
+                    batch_size=batch_size,
+                    verbose=1
+                )[0]  # Embeddings array
+
+            latent_dim = embeddings.shape[1]
+            df_embed = pd.DataFrame(embeddings)
+            df_embed.columns = [f"z{i}" for i in range(latent_dim)]
+            df_final = pd.concat([df_embed, labels.reset_index(drop=True)], axis=1)
+            result.append(df_final)
+
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+                df_final.to_pickle(os.path.join(save_dir, f"embeddings_model_{idx}.pkl"))
+                print(f"💾 Saved embeddings for model {idx} to disk.")
+
+            print(f"✅ Model {idx} done in {time.time() - start:.2f} seconds")
+
+        return result, latent_dim
     @staticmethod
     def get_icentia_embedding(splits, model):
         datasets = {

@@ -1,6 +1,6 @@
-save_results_path: /users/newc6477/VAE/12_Lead_VECG/results/full_set
+save_results_path: /users/newc6477/VAE/12_Lead_VECG/results/f
 seed: 42
-epochs: 100
+epochs: 150
 latent_dimension: 8
 learning_rate: 0.002
 coefficients:
