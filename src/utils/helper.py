@@ -133,7 +133,6 @@ class Helper:
 
         return (k['ecg'][lead][n:(n + 1)], k[label][n:(n + 1)]) if label else k['ecg'][lead][n:(n + 1)]
 
-
     @staticmethod
     def scheduler(epoch, lr):
         if epoch < 20:
